@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>말랑말랑 퇴근게임 (Office Suika Game)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Matter.js Physics Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <!-- Google Fonts: Prettify styling with Inter & Gmarket Sans equivalent -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overscroll-behavior: none;
+        }
+        /* Custom scrollbar for instructions if needed */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        /* Shaking animation for container danger */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        .shake-element {
+            animation: shake 0.2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+    <!-- Header Section -->
+    <header class="w-full bg-slate-900/80 backdrop-blur-md border-b border-slate-800 py-3 px-4 flex justify-between items-center z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-3xl">🥳</span>
+            <div>
+                <h1 class="text-lg font-extrabold tracking-tight bg-gradient-to-r from-emerald-400 to-green-500 bg-clip-text text-transparent">직장인의 퇴근게임</h1>
+                <p class="text-[10px] text-slate-400 font-medium">Daily Office Routine Merge</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <button id="btn-sound" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 transition text-slate-300 flex items-center justify-center text-sm gap-1" title="음소거 토글">
+                <span id="sound-icon">🔊</span> <span class="hidden sm:inline">소리 켬</span>
+            </button>
+            <button id="btn-restart" class="p-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 transition text-white text-sm font-bold flex items-center gap-1">
+                🔄 <span class="hidden sm:inline">다시 시작</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Section (Flexible Layout) -->
+    <main class="flex-1 flex flex-col lg:flex-row w-full max-w-7xl mx-auto p-4 gap-6 justify-center items-center overflow-y-auto">
+        
+        <!-- Left Pane: Game Play Zone -->
+        <div class="flex flex-col items-center">
+            <!-- Game Info (Scores) Bar -->
+            <div class="w-full max-w-[420px] flex justify-between gap-3 mb-3 shrink-0">
+                <div class="flex-1 bg-slate-900/60 backdrop-blur border border-slate-800/80 rounded-2xl p-3 flex items-center justify-between shadow-lg">
+                    <div class="text-left">
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">CURRENT SCORE</span>
+                        <span id="score" class="text-2xl font-black text-emerald-400 tracking-tight">0</span>
+                    </div>
+                    <span class="text-2xl">⭐</span>
+                </div>
+                <div class="flex-1 bg-slate-900/60 backdrop-blur border border-slate-800/80 rounded-2xl p-3 flex items-center justify-between shadow-lg">
+                    <div class="text-left">
+                        <span class="text-[10px] uppercase tracking-wider text-slate-400 block font-bold">BEST SCORE</span>
+                        <span id="best-score" class="text-2xl font-black text-amber-400 tracking-tight">0</span>
+                    </div>
+                    <span class="text-2xl">🏆</span>
+                </div>
+            </div>
+
+            <!-- The Canvas Frame -->
+            <div id="canvas-container" class="relative w-full max-w-[420px] aspect-[420/600] rounded-2xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center">
+                <!-- Drop line indicator (drawn inside canvas, but we also put a marker overlay) -->
+                <canvas id="game-canvas" class="w-full h-full block cursor-pointer"></canvas>
+
+                <!-- Start Screen Overlay -->
+                <div id="start-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col justify-center items-center p-6 text-center z-20">
+                    <span class="text-6xl animate-bounce mb-4">🥳</span>
+                    <h2 class="text-2xl font-black mb-2 text-white">눈물겨운 퇴근게임 시작!</h2>
+                    <p class="text-xs text-slate-400 max-w-xs mb-6 leading-relaxed">
+                        화면을 터치하거나 클릭해 일과를 떨어뜨리세요.<br>
+                        같은 단계의 일과끼리 만나면 다음 일과로 진화합니다!<br>
+                        쌓인 일이 야근 한계선(빨간 경계선)을 넘지 않게 조심하세요!
+                    </p>
+                    <button id="btn-start" class="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-base rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all duration-200">
+                        퇴근하러 가기 🏃‍♂️💨
+                    </button>
+                </div>
+
+                <!-- Game Over Overlay -->
+                <div id="game-over-overlay" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col justify-center items-center p-6 text-center z-20 hidden">
+                    <span class="text-6xl mb-4">😱</span>
+                    <h2 class="text-3xl font-black mb-1 text-rose-500">야근 확정!</h2>
+                    <p class="text-xs text-slate-400 mb-6">업무가 산더미처럼 쌓여 한계선을 넘었습니다!</p>
+                    
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 w-full max-w-xs mb-6 shadow-inner">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs text-slate-400 font-medium">최종 점수</span>
+                            <span id="final-score" class="text-xl font-bold text-emerald-400">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-slate-400 font-medium">최고 기록</span>
+                            <span id="final-best" class="text-xl font-bold text-amber-400">0</span>
+                        </div>
+                    </div>
+
+                    <button id="btn-restart-over" class="px-8 py-3 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-400 hover:to-amber-400 text-slate-950 font-black text-base rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 w-full max-w-xs">
+                        다시 출근하기 ⏰
+                    </button>
+                </div>
+
+                <!-- Touch Guide Lines (Hidden visually, works with event coordinates) -->
+                <div class="absolute top-2 left-4 text-[10px] text-rose-500/80 font-bold tracking-widest uppercase pointer-events-none">
+                    ⚠️ OVERTIME LIMIT
+                </div>
+            </div>
+            
+            <p class="text-xs text-slate-500 mt-2 text-center">
+                💡 마우스를 움직이고 클릭하거나, 터치 앤 드래그 후 손을 떼어 낙하 방향을 정하세요!
+            </p>
+        </div>
+
+        <!-- Right Pane: Game Progress Info & Stats -->
+        <div class="w-full max-w-[420px] flex flex-col gap-4">
+            
+            <!-- Next Fruit Preview & Helper -->
+            <div class="bg-slate-900/60 backdrop-blur border border-slate-800 rounded-2xl p-4 shadow-lg flex items-center justify-between">
+                <div>
+                    <h3 class="text-xs font-bold text-slate-400 mb-1 tracking-wider uppercase">NEXT ROUTINE</h3>
+                    <p id="next-fruit-name" class="text-lg font-black text-white">기상 ⏰</p>
+                </div>
+                <div class="relative w-16 h-16 bg-slate-800/80 border border-slate-700/50 rounded-2xl flex items-center justify-center text-3xl shadow-inner">
+                    <span id="next-fruit-emoji" class="transform scale-110">⏰</span>
+                </div>
+            </div>
+
+            <!-- Evolutionary Chain (과일 도감) -->
+            <div class="bg-slate-900/60 backdrop-blur border border-slate-800 rounded-2xl p-4 shadow-lg flex-1">
+                <h3 class="text-sm font-bold text-slate-300 mb-3 flex items-center gap-1.5 border-b border-slate-800 pb-2">
+                    <span>🧬</span> 퇴근 로드맵 (순서도)
+                </h3>
+                
+                <div class="grid grid-cols-4 gap-2 text-center" id="evolution-grid">
+                    <!-- Loaded dynamically via JS -->
+                </div>
+
+                <!-- Custom Sound Control System Note -->
+                <div class="mt-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800/50 text-[11px] text-slate-400 leading-relaxed">
+                    <strong class="text-emerald-400">🔥 퇴근 성공 꿀팁:</strong> 일과들은 위로 쌓일수록 경계선에 가까워져 야근 위기에 처합니다. 비교적 가벼운 '기상'이나 '샤워'를 구석의 빈틈으로 잘 굴려 보내서 무거운 일과들을 연쇄 반응시키세요!
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full text-center py-4 border-t border-slate-900 text-[11px] text-slate-500 shrink-0">
+        <p>© 2026 직장인 퇴근게임 Remake. Powered by Matter.js & Web Audio Synthesizer.</p>
+    </footer>
+
+    <!-- Audio & Game Controller logic in Script -->
+    <script>
+
+        // Game Sound Engine using Web Audio API (100% Client-side synthetic sound generation)
+        const AudioSynth = (() => {
+            let audioCtx = null;
+            let enabled = true;
+
+            const init = () => {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            };
+
+            const toggle = () => {
+                enabled = !enabled;
+                return enabled;
+            };
+
+            // Soft pop sound for falling fruits
+            const playDrop = (frequency = 150) => {
+                if (!enabled) return;
+                init();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(frequency * 0.5, audioCtx.currentTime + 0.15);
+
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            };
+
+            // Upbeat synthesis chord for fruit merging
+            const playMerge = (index) => {
+                if (!enabled) return;
+                init();
+                // Base notes corresponding to scale of fruit index
+                const baseFreqs = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 783.99];
+                const freq = baseFreqs[Math.min(index, baseFreqs.length - 1)];
+
+                const osc1 = audioCtx.createOscillator();
+                const osc2 = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc1.type = 'triangle';
+                osc1.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                osc1.frequency.exponentialRampToValueAtTime(freq * 1.5, audioCtx.currentTime + 0.2);
+
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(freq * 1.2, audioCtx.currentTime);
+                osc2.frequency.exponentialRampToValueAtTime(freq * 2.0, audioCtx.currentTime + 0.25);
+
+                gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.005, audioCtx.currentTime + 0.3);
+
+                osc1.start();
+                osc2.start();
+                osc1.stop(audioCtx.currentTime + 0.3);
+                osc2.stop(audioCtx.currentTime + 0.3);
+            };
+
+            // Retro buzzer sound for Game Over
+            const playGameOver = () => {
+                if (!enabled) return;
+                init();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.8);
+
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.85);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.85);
+            };
+
+            return { init, toggle, playDrop, playMerge, playGameOver, isEnabled: () => enabled };
+        })();
+
+
+        // Fruit Definitions (Re-themed for Worker's Daily Routine)
+        const FRUITS = [
+            { id: 0, name: "기상", emoji: "⏰", radius: 15, score: 2, color: "#f87171" },
+            { id: 1, name: "샤워", emoji: "🚿", radius: 21, score: 4, color: "#60a5fa" },
+            { id: 2, name: "옷입기", emoji: "👕", radius: 28, score: 8, color: "#fbbf24" },
+            { id: 3, name: "지하철", emoji: "🚇", radius: 36, score: 16, color: "#a78bfa" },
+            { id: 4, name: "출근", emoji: "🏢", radius: 45, score: 32, color: "#34d399" },
+            { id: 5, name: "오전업무", emoji: "💻", radius: 55, score: 64, color: "#f472b6" },
+            { id: 6, name: "점심식사", emoji: "🍱", radius: 66, score: 128, color: "#fb7185" },
+            { id: 7, name: "커피타임", emoji: "☕", radius: 78, score: 256, color: "#b45309" },
+            { id: 8, name: "오후업무", emoji: "📊", radius: 92, score: 512, color: "#818cf8" },
+            { id: 9, name: "간식타임", emoji: "🍩", radius: 108, score: 1024, color: "#fb923c" },
+            { id: 10, name: "퇴근", emoji: "🥳", radius: 125, score: 2048, color: "#10b981" }
+        ];
+
+        // Setup evolution table UI dynamically
+        const evolutionGrid = document.getElementById("evolution-grid");
+        FRUITS.forEach((fruit) => {
+            const card = document.createElement("div");
+            card.className = "bg-slate-950/80 rounded-xl p-2 border border-slate-850 flex flex-col items-center justify-center shadow-md select-none hover:border-slate-700 transition";
+            card.innerHTML = `
+                <div class="text-2xl mb-1">${fruit.emoji}</div>
+                <div class="text-[10px] font-bold text-slate-300 truncate w-full">${fruit.name}</div>
+                <div class="text-[8px] text-slate-500 font-bold mt-0.5">${fruit.score}점</div>
+            `;
+            evolutionGrid.appendChild(card);
+        });
+
+
+        // Physics variables
+        const { Engine, World, Bodies, Body, Composite, Events } = Matter;
+        let engine;
+        let world;
+
+        // Game State
+        let score = 0;
+        let bestScore = parseInt(localStorage.getItem("suika_best_score") || "0");
+        let gameOver = false;
+        let activeFruit = null;
+        let nextFruitIndex = 0;
+        let canDrop = true;
+        let dropsCount = 0;
+        let gameLoopId = null;
+        let particleSystem = [];
+        let isStarted = false;
+
+        // Container limits & boundaries
+        const canvas = document.getElementById("game-canvas");
+        const ctx = canvas.getContext("2d");
+
+        // Set baseline viewport simulation size (Virtual coordinates 450 x 650)
+        const GAME_WIDTH = 420;
+        const GAME_HEIGHT = 600;
+        const CONTAINER_TOP_LIMIT = 80; // Above this is unsafe / dropping zone
+        const DEATH_HEIGHT = 100; // Fruit stacking higher than this triggers gameover count
+
+        // Scale factor for responsive retina display rendering
+        let dpr = window.devicePixelRatio || 1;
+        
+        function resizeCanvas() {
+            const container = document.getElementById("canvas-container");
+            const rect = container.getBoundingClientRect();
+            
+            // Set canvas size to internal coordinate scale to support layout
+            canvas.width = GAME_WIDTH * dpr;
+            canvas.height = GAME_HEIGHT * dpr;
+            
+            ctx.scale(dpr, dpr);
+        }
+
+        // Setup Best Score UI initial state
+        document.getElementById("best-score").textContent = bestScore;
+
+
+        const soundBtn = document.getElementById("btn-sound");
+        const soundIcon = document.getElementById("sound-icon");
+        soundBtn.addEventListener("click", () => {
+            const isSoundOn = AudioSynth.toggle();
+            soundIcon.textContent = isSoundOn ? "🔊" : "🔇";
+            soundBtn.querySelector("span:not(#sound-icon)").textContent = isSoundOn ? "소리 켬" : "소리 끔";
+            AudioSynth.init();
+        });
+
+
+        function initPhysics() {
+            engine = Engine.create({
+                gravity: { y: 1.2, x: 0 },
+                constraintIterations: 10,
+                positionIterations: 10,
+                velocityIterations: 10
+            });
+            world = engine.world;
+
+            // Walls (Left, Right, Bottom)
+            const thickness = 50;
+            const leftWall = Bodies.rectangle(-thickness / 2, GAME_HEIGHT / 2, thickness, GAME_HEIGHT, { isStatic: true, friction: 0.1, restitution: 0.2 });
+            const rightWall = Bodies.rectangle(GAME_WIDTH + thickness / 2, GAME_HEIGHT / 2, thickness, GAME_HEIGHT, { isStatic: true, friction: 0.1, restitution: 0.2 });
+            const bottomWall = Bodies.rectangle(GAME_WIDTH / 2, GAME_HEIGHT + thickness / 2, GAME_WIDTH, thickness, { isStatic: true, friction: 0.5, restitution: 0.1 });
+
+            World.add(world, [leftWall, rightWall, bottomWall]);
+
+            // Track merge collisions to prevent multiple simultaneous triggers on same body
+            let mergedThisTick = new Set();
+
+            Events.on(engine, "collisionStart", (event) => {
+                const pairs = event.pairs;
+                pairs.forEach((pair) => {
+                    const { bodyA, bodyB } = pair;
+                    
+                    // Verify both bodies are fruits
+                    if (bodyA.hasOwnProperty('fruitIndex') && bodyB.hasOwnProperty('fruitIndex')) {
+                        const indexA = bodyA.fruitIndex;
+                        const indexB = bodyB.fruitIndex;
+
+                        if (indexA === indexB && !mergedThisTick.has(bodyA.id) && !mergedThisTick.has(bodyB.id)) {
+                            // Perfect merge match!
+                            mergedThisTick.add(bodyA.id);
+                            mergedThisTick.add(bodyB.id);
+
+                            // Trigger physics world step removal on next animation cycle
+                            requestAnimationFrame(() => {
+                                handleMerge(bodyA, bodyB);
+                            });
+                        }
+                    }
+                });
+            });
+
+            // Reset merge tracker at end of engine collision resolver
+            Events.on(engine, "afterUpdate", () => {
+                mergedThisTick.clear();
+            });
+        }
+
+
+        function handleMerge(bodyA, bodyB) {
+            // Find positions
+            const posX = (bodyA.position.x + bodyB.position.x) / 2;
+            const posY = (bodyA.position.y + bodyB.position.y) / 2;
+            const targetIndex = bodyA.fruitIndex + 1;
+
+            // Remove previous bodies
+            World.remove(world, [bodyA, bodyB]);
+
+            // Add juice blast particle effects
+            createSplashParticles(posX, posY, FRUITS[bodyA.fruitIndex].color);
+
+            // Special Case: Two "퇴근" merge -> Ultra Golden Celebration!
+            if (bodyA.fruitIndex === FRUITS.length - 1) {
+                score += 5000;
+                updateScoreUI();
+                AudioSynth.playMerge(10);
+                createSplashParticles(posX, posY, "#ffd700", 40); // gold fireworks
+                return;
+            }
+
+            // Create next fruit
+            const mergedFruitDef = FRUITS[targetIndex];
+            const nextBody = createFruitBody(posX, posY, targetIndex);
+            World.add(world, nextBody);
+
+            // Audio cues & Scores
+            AudioSynth.playMerge(targetIndex);
+            score += mergedFruitDef.score;
+            updateScoreUI();
+        }
+
+        function createFruitBody(x, y, index, isStatic = false) {
+            const def = FRUITS[index];
+            const fruit = Bodies.circle(x, y, def.radius, {
+                restitution: 0.15, // slight bounce for squeeze effect
+                friction: 0.08,
+                density: 0.001 * (index + 1), // larger fruits feel heavier
+                isStatic: isStatic,
+                label: `fruit_${index}`
+            });
+            fruit.fruitIndex = index;
+            fruit.spawnTime = Date.now();
+            return fruit;
+        }
+
+
+        function createSplashParticles(x, y, color, count = 15) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 6 + 2;
+                particleSystem.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1, // slight upwards bias
+                    radius: Math.random() * 4 + 2,
+                    alpha: 1.0,
+                    color: color,
+                    decay: Math.random() * 0.02 + 0.01
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particleSystem.length - 1; i >= 0; i--) {
+                const p = particleSystem[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.12; // light gravity effect for particles
+                p.alpha -= p.decay;
+
+                if (p.alpha <= 0) {
+                    particleSystem.splice(i, 1);
+                }
+            }
+        }
+
+
+        function prepareNextFruit() {
+            // First drop or random standard start fruits (Cherry to Dekopon, i.e., index 0 to 4)
+            nextFruitIndex = Math.floor(Math.random() * 5);
+            updatePreviewUI();
+        }
+
+        function spawnActiveFruit() {
+            if (gameOver) return;
+
+            const spawnX = GAME_WIDTH / 2;
+            const spawnY = CONTAINER_TOP_LIMIT - 30;
+
+            activeFruit = createFruitBody(spawnX, spawnY, nextFruitIndex, true);
+            World.add(world, activeFruit);
+
+            // Cycle upcoming index
+            nextFruitIndex = Math.floor(Math.random() * 5);
+            updatePreviewUI();
+
+            canDrop = true;
+        }
+
+        function updatePreviewUI() {
+            const nextDef = FRUITS[nextFruitIndex];
+            document.getElementById("next-fruit-name").textContent = `${nextDef.name} ${nextDef.emoji}`;
+            document.getElementById("next-fruit-emoji").textContent = nextDef.emoji;
+        }
+
+        function updateScoreUI() {
+            document.getElementById("score").textContent = score;
+            if (score > bestScore) {
+                bestScore = score;
+                document.getElementById("best-score").textContent = bestScore;
+                localStorage.setItem("suika_best_score", bestScore.toString());
+            }
+        }
+
+
+        let touchStartX = 0;
+        let isTouching = false;
+
+        function setDropperX(posX) {
+            if (!activeFruit || !activeFruit.isStatic) return;
+
+            // Constrain current dropper radius inside container walls
+            const currentRadius = FRUITS[activeFruit.fruitIndex].radius;
+            const minX = currentRadius + 5;
+            const maxX = GAME_WIDTH - currentRadius - 5;
+
+            const targetX = Math.max(minX, Math.min(maxX, posX));
+            Body.setPosition(activeFruit, { x: targetX, y: activeFruit.position.y });
+        }
+
+        function triggerDrop() {
+            if (!activeFruit || !canDrop || gameOver) return;
+
+            canDrop = false;
+            // Activate physics on current dropped body
+            Body.setStatic(activeFruit, false);
+            activeFruit.spawnTime = Date.now(); // track settled height timer
+            
+            AudioSynth.playDrop(250 - activeFruit.fruitIndex * 15);
+            
+            activeFruit = null;
+            dropsCount++;
+
+            // Cool-down spawn of next fruit to prevent overlapping spamming
+            setTimeout(() => {
+                spawnActiveFruit();
+            }, 600);
+        }
+
+        // Setup Events
+        function setupControls() {
+            // Mouse moves
+            canvas.addEventListener("mousemove", (e) => {
+                if (gameOver) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * GAME_WIDTH;
+                setDropperX(x);
+            });
+
+            // Mouse Release/Click to Drop
+            canvas.addEventListener("mousedown", (e) => {
+                if (gameOver) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * GAME_WIDTH;
+                setDropperX(x);
+                isTouching = true;
+            });
+
+            canvas.addEventListener("mouseup", () => {
+                if (isTouching) {
+                    isTouching = false;
+                    triggerDrop();
+                }
+            });
+
+            // Touch device support
+            canvas.addEventListener("touchstart", (e) => {
+                if (gameOver || e.touches.length === 0) return;
+                AudioSynth.init(); // Activate Audio Session on touch click
+                const rect = canvas.getBoundingClientRect();
+                const x = ((e.touches[0].clientX - rect.left) / rect.width) * GAME_WIDTH;
+                setDropperX(x);
+                isTouching = true;
+                e.preventDefault();
+            }, { passive: false });
+
+            canvas.addEventListener("touchmove", (e) => {
+                if (gameOver || e.touches.length === 0) return;
+                const rect = canvas.getBoundingClientRect();
+                const x = ((e.touches[0].clientX - rect.left) / rect.width) * GAME_WIDTH;
+                setDropperX(x);
+                e.preventDefault();
+            }, { passive: false });
+
+            canvas.addEventListener("touchend", (e) => {
+                if (isTouching) {
+                    isTouching = false;
+                    triggerDrop();
+                }
+                e.preventDefault();
+            }, { passive: false });
+        }
+
+
+        let shakeTime = 0;
+
+        function runGameLoop() {
+            // Update physical matter engine
+            Engine.update(engine, 1000 / 60);
+
+            // Clean canvas drawing space
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Draw Subtle Grid/Guide in Background
+            ctx.fillStyle = "rgba(15, 23, 42, 0.4)";
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            // Draw Danger Death Line indicator
+            ctx.strokeStyle = "rgba(244, 63, 94, 0.5)";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 6]);
+            ctx.beginPath();
+            ctx.moveTo(10, DEATH_HEIGHT);
+            ctx.lineTo(GAME_WIDTH - 10, DEATH_HEIGHT);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset line style
+
+            // Check if any fruits are crossing line towards gameover condition
+            let dangerDetected = false;
+            const bodies = Composite.allBodies(world);
+
+            bodies.forEach((body) => {
+                // Render walls
+                if (body.isStatic && !body.hasOwnProperty('fruitIndex')) {
+                    return;
+                }
+
+                const index = body.fruitIndex;
+                const def = FRUITS[index];
+
+                // Check gameover: only dynamic settled fruits count
+                if (!body.isStatic && body.position.y - def.radius < DEATH_HEIGHT) {
+                    // Fruit must have settled for at least 1.5 seconds to count as game over, preventing instant gameovers during drop
+                    if (Date.now() - body.spawnTime > 1500) {
+                        dangerDetected = true;
+                    }
+                }
+
+                // Render Fruit Body beautifully using standard Emoji centering & rotation
+                ctx.save();
+                ctx.translate(body.position.x, body.position.y);
+                ctx.rotate(body.angle);
+
+                // Glow radial shadow corresponding to the size of the fruit
+                ctx.shadowColor = def.color;
+                ctx.shadowBlur = Math.min(10, def.radius / 2);
+
+                // Draw circle backing
+                ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+                ctx.strokeStyle = def.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, def.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Clear shadow blur for faster text painting
+                ctx.shadowBlur = 0;
+
+                // Center Draw Emoji
+                ctx.font = `${def.radius * 1.3}px Inter, Apple Color Emoji`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(def.emoji, 0, 1.5); // minor y displacement for optimal emoji layout
+
+                ctx.restore();
+            });
+
+            // Draw Juice Particles
+            updateParticles();
+            particleSystem.forEach((p) => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // Screen/Container Shake Feedback during heavy danger detection
+            const containerFrame = document.getElementById("canvas-container");
+            if (dangerDetected) {
+                shakeTime++;
+                if (shakeTime > 20) {
+                    containerFrame.classList.add("shake-element");
+                }
+                // If danger persists too long, trigger actual game over
+                if (shakeTime > 160) {
+                    triggerGameOver();
+                }
+            } else {
+                shakeTime = 0;
+                containerFrame.classList.remove("shake-element");
+            }
+
+            // Loop unless GameOver State is achieved
+            if (!gameOver) {
+                gameLoopId = requestAnimationFrame(runGameLoop);
+            }
+        }
+
+
+        function triggerGameOver() {
+            gameOver = true;
+            cancelAnimationFrame(gameLoopId);
+            AudioSynth.playGameOver();
+            
+            document.getElementById("final-score").textContent = score;
+            document.getElementById("final-best").textContent = bestScore;
+            document.getElementById("game-over-overlay").classList.remove("hidden");
+            document.getElementById("canvas-container").classList.remove("shake-element");
+        }
+
+        function startNewGame() {
+            // Cancel current frames
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+
+            // Clean physical world components (except walls which are elements 0,1,2)
+            const bodies = Composite.allBodies(world);
+            bodies.forEach((body) => {
+                if (body.hasOwnProperty('fruitIndex')) {
+                    World.remove(world, body);
+                }
+            });
+
+            // Clear logical arrays
+            particleSystem = [];
+            score = 0;
+            gameOver = false;
+            canDrop = true;
+            shakeTime = 0;
+            updateScoreUI();
+
+            // Re-setup preview structure
+            prepareNextFruit();
+            spawnActiveFruit();
+
+            // Hide UI screen overlaps
+            document.getElementById("game-over-overlay").classList.add("hidden");
+            document.getElementById("start-overlay").classList.add("hidden");
+
+            // Kickstart animations
+            runGameLoop();
+        }
+
+        // Register Action Listeners
+        document.getElementById("btn-start").addEventListener("click", () => {
+            AudioSynth.init();
+            isStarted = true;
+            startNewGame();
+        });
+
+        document.getElementById("btn-restart").addEventListener("click", () => {
+            if (!isStarted) return;
+            if (confirm("게임을 처음부터 다시 시작하시겠습니까?")) {
+                startNewGame();
+            }
+        });
+
+        document.getElementById("btn-restart-over").addEventListener("click", () => {
+            startNewGame();
+        });
+
+        // Initialize viewport sizes on load
+        window.addEventListener("load", () => {
+            resizeCanvas();
+            initPhysics();
+            
+            // Draw dummy board background until start button is clicked
+            ctx.fillStyle = "#0f172a";
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            setupControls();
+        });
+
+        // Track resize events to preserve scaling ratios
+        window.addEventListener("resize", () => {
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>
